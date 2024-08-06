@@ -1,0 +1,198 @@
+{% spaceless %}
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": false}'>
+
+            <title>Chatbot</title>
+            <!-- bootstrap -->
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" 
+                rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+            <!-- icons -->
+            <link href="https://cdn.lineicons.com/4.0/lineicons.css" rel="stylesheet" />
+            <!-- Google font (Inter family) -->
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+            <!-- google fonts (roboto) -->
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
+
+            <!-- htmx -->
+            <script src="https://unpkg.com/htmx.org@1.6.1"
+                integrity="sha384-tvG/2mnCFmGQzYC1Oh3qxQ7CkQ9kMzYjWZSNtrRZygHPDDqottzEJsqS4oUVodhW"
+                crossorigin="anonymous">
+            </script>
+
+            <!-- alpinejs -->
+            <script src="https://unpkg.com/alpinejs@3.7.1/dist/cdn.min.js"
+                defer
+                integrity="sha384-KLv/Yaw8nAj6OXX6AvVFEt1FNRHrfBHziZ2JzPhgO9OilYrn6JLfCR4dZzaaQCA5"
+                crossorigin="anonymous">
+            </script>
+
+            <style>
+                .chat-popup {
+                    position: fixed;
+                    bottom: 80px; /* Adjusted to sit above the button */
+                    right: 15px;
+                    border: 1px solid #ccc;
+                    z-index: 9;
+                    display: none;
+                    width: 400px;
+                }
+                .open-button {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 9;
+                    color: white;
+                    border-radius: 50%;
+                    width: 60px;
+                    height: 60px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                }
+                
+                .chat-bubble {
+                    border-radius: 5px;
+                    margin-bottom: 5px;
+                }
+                  
+                .chat-bubble-user {
+                    background-color: #eee;
+                    border: 1px solid #ddd;
+                    text-align: right;
+                }
+                
+                .chat-bubble-assistant {
+                    background-color: #f5f5f5;
+                    border: 1px solid #e0e0e0;
+                    color: #333; 
+                    text-align: left;
+                }
+                
+                #conversation {
+                    overflow-y: auto; /* Scrolling sem barra */
+                    padding: 0;
+                    margin: 0;
+                }
+                
+                #conversation::-webkit-scrollbar { /* Chrome & Safari */
+                    width: 0px;
+                    background-color: transparent;
+                }
+                
+                #conversation::-moz-scrollbar { /* Firefox */
+                    width: 0px;
+                    background-color: transparent;
+                }
+
+                .form-control:focus {
+                    box-shadow: none;
+                }
+            </style>
+        </head>
+        <body class="bg-light" hx-boost="true" x-data="{ loading: false }" x-init="
+            document.body.addEventListener('htmx:configRequest', () => {
+                loading = true;
+                setTimeout(() => {
+                    document.getElementById('progress-bar').style.width = '100%';
+                }, 10);
+            });
+            document.body.addEventListener('htmx:afterRequest', () => {
+                loading = false;
+                document.getElementById('progress-bar').style.width = '0%';
+            });" style="font-family: 'Roboto', sans-serif;">
+            
+            <!-- Progress Bar -->
+            <div class="w-100 h-25 position-fixed" x-show="loading" style="z-index: 9999;">
+                <div class="progress" role="progressbar" aria-label="Example 1px high" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" style="height: 2px">
+                    <div id="progress-bar" class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 0%; transition: width 2.5s;"></div>
+                </div>
+            </div>
+
+            <button class="btn btn-lg btn-outline-dark border border-0 text-secondary open-button" onclick="openChat()">
+                <i class="lni lni-bubble"></i>
+            </button>
+
+            </div>
+
+            <div class="card chat-popup" id="chatForm">
+                <div class="card-header bg-dark text-light border border-0">
+                    Assistant
+                    <button type="button" class="btn-close btn-close-white float-end" aria-label="Close" onclick="closeChat()"></button>
+                </div>
+                <div class="card-body bg-light">
+                    <div id="conversation" class="bg-light border border-0" style="height: 200px;">
+                        {% include '_chat_conversations.html' %}
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <form id="chat-form" method="POST" action="{% url 'chatbot' %}" hx-post="{% url 'chatbot' %}" hx-target="#conversation" hx-swap="innerHTML">
+                        {% csrf_token %}
+                        <div class="input-group justify-content-center align-items-center">
+                            <div x-data="autoResizeTextarea()" class="w-75">
+                                <textarea 
+                                    id="user-input" 
+                                    x-ref="textarea" 
+                                    x-on:input="adjustTextareaHeight" 
+                                    rows="1" hx-trigger="enter" name="user_input" 
+                                    class="form-control border-0 border-bottom border-dark rounded-0 bg-light" 
+                                    placeholder="Write your message..."
+                                    style="resize: none; overflow: hidden; box-sizing: border-box;"></textarea>
+                            </div>
+                            <div class="input-group-append">
+                                <input type="submit" value="Send"
+                                    class="btn btn-outline-dark text-secondary">
+                                </input>
+                            </div>
+                        </div>
+                    </form>
+                </div> 
+            </div>
+            
+            <script>
+            
+                function openChat() {
+                    document.getElementById("chatForm").style.display = "block";
+                }
+            
+                function closeChat() {
+                    document.getElementById("chatForm").style.display = "none";
+                }
+            
+                function autoResizeTextarea() {
+                    return {
+                        adjustTextareaHeight() {
+                            this.$refs.textarea.style.height = 'auto';
+                            this.$refs.textarea.style.height = this.$refs.textarea.scrollHeight + 'px';
+                        }
+                    };
+                }
+                
+                document.addEventListener('DOMContentLoaded', () => {
+                    const userInput = document.getElementById('user-input');
+                    const conversation = document.getElementById('conversation');
+            
+                    // Scroll conversation to the bottom
+                    conversation.scrollTop = conversation.scrollHeight;
+            
+                    // Focus on the user input field
+                    userInput.focus();
+                });
+            </script>
+
+            <script 
+                src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
+                integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
+                crossorigin="anonymous">
+            </script>
+        </body>
+    </html>
+{% endspaceless %}

@@ -1,0 +1,7 @@
+{% for message in conversation %}
+    {% if message.role == 'user' %}
+        <div class="chat-bubble chat-bubble-user"><p>{{ message.content }}</p></div>
+    {% elif message.role == 'assistant' %}
+        <div class="chat-bubble chat-bubble-assistant"><p>{{ message.content }}</p></div>
+    {% endif %}
+{% endfor %}
